@@ -1,5 +1,5 @@
 ---
-name: 'Issue: ♻️ REFACTOR'
+name: ♻️ REFACTOR'
 about: 리팩토링 템플릿입니다.
 title: "♻️ [REFACTOR]"
 labels: ''
