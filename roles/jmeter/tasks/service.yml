@@ -1,0 +1,22 @@
+# roles/jmeter/tasks/service.yml
+- name: Copy systemd service file
+  copy:
+    content: |
+      [Unit]
+      Description=JMeter Load Test
+      After=network.target
+
+      [Service]
+      ExecStart=/opt/jmeter/run.sh
+      Restart=on-failure
+
+      [Install]
+      WantedBy=multi-user.target
+    dest: /etc/systemd/system/jmeter.service
+    mode: '0644'
+
+- name: Enable and start JMeter service
+  systemd:
+    name: jmeter
+    enabled: yes
+    state: started

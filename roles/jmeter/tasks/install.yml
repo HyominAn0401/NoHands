@@ -1,0 +1,20 @@
+# JMeter 설치 경로 생성
+- name: Create /opt/jmeter directory
+  file:
+    path: /opt/jmeter
+    state: directory
+    mode: '0755'
+
+# JMeter 다운로드드
+- name: Download Apache JMeter
+  get_url:
+    url: https://downloads.apache.org//jmeter/binaries/apache-jmeter-5.6.3.tgz
+    dest: /opt/jmeter/apache-jmeter.tgz
+
+# JMeter 다운로드 > 압축 파일 해제
+- name: Extract Apache JMeter
+  unarchive:
+    src: /opt/jmeter/apache-jmeter.tgz
+    dest: /opt/jmeter
+    remote_src: yes
+    extra_opts: [--strip-components=1]

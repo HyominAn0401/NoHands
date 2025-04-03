@@ -1,0 +1,8 @@
+- name: Include JMeter installation
+  include_tasks: install.yml
+
+- name: Include JMeter configuration
+  include_tasks: config.yml
+
+- name: Include JMeter systemd service setup
+  include_tasks: service.yml

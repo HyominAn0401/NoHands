@@ -1,0 +1,14 @@
+# roles/jmeter/tasks/config.yml
+---
+
+- name: Copy test_plan.jmx
+  copy:
+    src: test_plan.jmx
+    dest: /opt/jmeter/noHands.jmx
+    mode: '0644'
+
+- name: Copy run.sh script
+  copy:
+    src: run.sh
+    dest: /opt/jmeter/run.sh
+    mode: '0755'
