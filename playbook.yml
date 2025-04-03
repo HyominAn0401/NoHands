@@ -1,0 +1,7 @@
+- name: JMeter Role Test
+  hosts: localhost
+  connection: local
+  become: true
+
+  roles:
+    - jmeter
