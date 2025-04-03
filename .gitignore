@@ -1,0 +1,6 @@
+# log file
+*.log
+
+# report directory
+report/
+opt/jmeter/report/
