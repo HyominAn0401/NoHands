@@ -8,24 +8,19 @@ packer {
 }
 
 source "amazon-ebs" "ubuntu" {
-  ami_name      = "learn-packer-linux-aws"
+  ami_name      = "nohands-ami-{{timestamp}}" 
   instance_type = "t2.micro"
-  region        = "ap-northest-2"
-  source_ami_filter {
-    filters = {
-      name                = "ubuntu/images/*ubuntu-jammy-22.04-amd64-server-*"
-      root-device-type    = "ebs"
-      virtualization-type = "hvm"
-    }
-    most_recent = true
-    owners      = ["099720109477"]
-  }
-  ssh_username = "ubuntu"
+  region        = "ap-northeast-2"          
+  source_ami    = "ami-05a7f3469a7653972"        
+  ssh_username  = "ubuntu"                
 }
 
 build {
-  name    = "learn-packer"
-  sources = [
-    "source.amazon-ebs.ubuntu"
-  ]
+  name    = "nohands-packer"
+  sources = ["source.amazon-ebs.ubuntu"]
+
+  provisioner "ansible" {
+    playbook_file = "./playbook.yml"
+  }
 }
+
