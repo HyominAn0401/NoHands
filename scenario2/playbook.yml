@@ -1,5 +1,7 @@
 - name: JMeter Role
   hosts: all
   become: true
+  vars:
+    ansible_roles_path: "../roles"
   roles:
     - jmeter

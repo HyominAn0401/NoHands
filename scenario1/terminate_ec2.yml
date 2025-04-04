@@ -1,12 +1,9 @@
-- name: Terminate temp EC2
+- name: Terminate EC2 instance
   hosts: localhost
   gather_facts: false
-  vars_files:
-    - ../packer/instance_info.json
-
   tasks:
-    - name: Terminate instance
+    - name: Terminate instance by ID
       amazon.aws.ec2:
-        instance_ids: "{{ instance_id }}"
-        region: ap-northeast-2
         state: absent
+        region: ap-northeast-2
+        instance_ids: "{{ instance_id }}"

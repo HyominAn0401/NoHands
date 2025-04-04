@@ -4,3 +4,7 @@
 # report directory
 report/
 opt/jmeter/report/
+
+# AWS CLI 설치 파일
+awscliv2.zip
+aws/
