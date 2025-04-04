@@ -1,3 +1,10 @@
+# Java 11 설치
+- name: Install Java 11
+  apt:
+    name: openjdk-11-jdk
+    state: present
+    update_cache: yes
+
 # JMeter 설치 경로 생성
 - name: Create /opt/jmeter directory
   file:
