@@ -1,0 +1,35 @@
+{
+    "metrics": {
+      "append_dimensions": {
+        "InstanceId": "${aws:InstanceId}"
+      },
+      "metrics_collected": {
+        "cpu": {
+          "measurement": ["cpu_usage_idle", "cpu_usage_user", "cpu_usage_system"],
+          "metrics_collection_interval": 60
+        },
+        "mem": {
+          "measurement": ["mem_used_percent"],
+          "metrics_collection_interval": 60
+        },
+        "disk": {
+          "measurement": ["used_percent"],
+          "metrics_collection_interval": 60,
+          "resources": ["/"]
+        }
+      }
+    },
+    "logs": {
+      "logs_collected": {
+        "files": {
+          "collect_list": [
+            {
+              "file_path": "/opt/jmeter/results/result.jtl",
+              "log_group_name": "/jmeter/perf-tests",
+              "log_stream_name": "{instance_id}-jmeter"
+            }
+          ]
+        }
+      }
+    }
+}  

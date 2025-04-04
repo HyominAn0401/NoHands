@@ -1,0 +1,30 @@
+- name: Download CloudWatch Agent
+  get_url:
+    url: https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
+    dest: /tmp/amazon-cloudwatch-agent.deb
+
+- name: Install CloudWatch Agent
+  apt:
+    deb: /tmp/amazon-cloudwatch-agent.deb
+
+- name: Copy CloudWatch Agent config file
+  copy:
+    src: amazon-cloudwatch-agent.json
+    dest: /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Start CloudWatch Agent
+  command: >
+    /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl
+    -a fetch-config
+    -m ec2
+    -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+    -s
+  register: cw_agent_start
+  changed_when: "'Configuration validation succeeded' in cw_agent_start.stdout"
+
+- name: Debug agent start result
+  debug:
+    var: cw_agent_start.stdout_lines
