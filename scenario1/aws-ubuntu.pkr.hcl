@@ -23,4 +23,3 @@ build {
     playbook_file = "./playbook.yml"
   }
 }
-

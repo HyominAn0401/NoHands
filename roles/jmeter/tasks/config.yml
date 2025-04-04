@@ -1,6 +1,3 @@
-# roles/jmeter/tasks/config.yml
----
-
 - name: Copy test_plan.jmx
   copy:
     src: test_plan.jmx
