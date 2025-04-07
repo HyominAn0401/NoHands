@@ -64,7 +64,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
           aws ec2 create-launch-template-version \
-            --launch-template-name "NoHands_final_new_tp" \
+            --launch-template-name "NoHands_final_tp" \
             --source-version \$Latest \
             --launch-template-data "{\"ImageId\":\"$AMI_ID\"}" \
             --region ap-northeast-2
