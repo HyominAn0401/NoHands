@@ -19,3 +19,4 @@
     name: jmeter
     enabled: yes
     state: started
+  when: ansible_virtualization_type != "docker"

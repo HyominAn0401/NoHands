@@ -7,6 +7,16 @@
     dest: /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
     mode: '0644'
 
+# - name: Start CloudWatch Agent
+#   command: >
+#     /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl
+#     -a fetch-config
+#     -m ec2
+#     -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+#     -s
+#   register: cloudwatch_agent_status
+#   changed_when: "'success' in cloudwatch_agent_status.stdout"
+
 - name: Start CloudWatch Agent
   command: >
     /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl
@@ -15,7 +25,8 @@
     -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
     -s
   register: cloudwatch_agent_status
-  changed_when: "'success' in cloudwatch_agent_status.stdout or 'Configuration validation succeeded' in cloudwatch_agent_status.stdout"
+  changed_when: "'success' in cloudwatch_agent_status.stdout"
+  when: ansible_virtualization_type != "docker"
 
 - name: Show CloudWatch Agent status
   debug:
