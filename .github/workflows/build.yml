@@ -22,6 +22,15 @@ jobs:
       - name: Build Docker image
         run: docker build -t packer-ansible-builder .
 
+      - name: Set Packer Vars
+        id: set-vars
+        run: |
+          if [ "${{ matrix.scenario }}" = "scenario1" ]; then
+            echo 'PACKER_VARS=-var subnet_id=${{ secrets.SUBNET_ID }} -var security_group_id=${{ secrets.SECURITY_GROUP_ID }}' >> $GITHUB_ENV
+          else
+            echo 'PACKER_VARS=-var subnet_id=${{ secrets.SUBNET_ID }} -var vpc_id=${{ secrets.VPC_ID }}' >> $GITHUB_ENV
+          fi
+
       - name: Run Packer Build for ${{ matrix.scenario }}
         run: |
           docker run --rm \
@@ -30,8 +39,4 @@ jobs:
             -e AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} \
             -e AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} \
             packer-ansible-builder \
-            packer build \
-              -var "subnet_id=${{ secrets.SUBNET_ID }}" \
-              -var "security_group_id=${{ secrets.SECURITY_GROUP_ID }}" \
-              -var "vpc_id=${{ secrets.VPC_ID }}" \
-              aws-ubuntu.pkr.hcl
+            packer build $PACKER_VARS aws-ubuntu.pkr.hcl
