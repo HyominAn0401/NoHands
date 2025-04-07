@@ -1,0 +1,8 @@
+# MOTD 설정
+- name: Set up MOTD
+  copy:
+    src: motd
+    dest: /etc/motd
+    owner: root
+    group: root
+    mode: '0644'

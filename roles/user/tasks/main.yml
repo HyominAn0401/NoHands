@@ -1,0 +1,20 @@
+# 공용 사용자 생성
+- name: Create shared user
+  user:
+    name: tester
+    shell: /bin/bash
+    groups: sudo
+    append: yes
+
+# 루트 SSH 로그인 비활성화
+- name: Disable root SSH login
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^PermitRootLogin'
+    line: 'PermitRootLogin no'
+
+# 재시작 명령
+- name: Restart ssh
+  service:
+    name: ssh
+    state: restarted
