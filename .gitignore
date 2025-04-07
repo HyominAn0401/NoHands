@@ -9,4 +9,6 @@ opt/jmeter/report/
 awscliv2.zip
 aws/
 
+# pkrvars.hcl 환경변수 파일
 scenario1/aws-ubuntu.pkrvars.hcl
+scenario2/aws-ubuntu.pkrvars.hcl

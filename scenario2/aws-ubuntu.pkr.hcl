@@ -11,14 +11,22 @@ packer {
   }
 }
 
+variable "subnet_id" {
+  type = string
+}
+
+variable "security_group_id" {
+  type = string
+}
+
 source "amazon-ebs" "ubuntu" {
   ami_name      = "nohands-ami2-{{timestamp}}"
   instance_type = "t2.micro"
   region        = "ap-northeast-2"
   ssh_username  = "ubuntu"
 
-  subnet_id     = "subnet-09fe04dc1acd12af7"     # subnet
-  vpc_id        = "vpc-0ae95107e637880db"        # vpc
+  subnet_id     = var.subnet_id
+  vpc_id        = var.vpc_id
   
   associate_public_ip_address = true
   ssh_interface = "public_ip"
