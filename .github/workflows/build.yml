@@ -12,6 +12,7 @@ jobs:
       matrix:
         scenario: [scenario1, scenario2]
     name: Build AMI for ${{ matrix.scenario }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -19,7 +20,7 @@ jobs:
       - name: Set up Docker
         uses: docker/setup-buildx-action@v3
 
-      - name: Build Docker image
+      - name: Build Docker image for Packer + Ansible
         run: docker build -t packer-ansible-builder .
 
       - name: Set Packer Vars
@@ -30,6 +31,14 @@ jobs:
           else
             echo 'PACKER_VARS=-var subnet_id=${{ secrets.SUBNET_ID }} -var vpc_id=${{ secrets.VPC_ID }}' >> $GITHUB_ENV
           fi
+
+      - name: Initialize Packer Plugins
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/workspace \
+            -w /workspace/${{ matrix.scenario }} \
+            packer-ansible-builder \
+            packer init .
 
       - name: Run Packer Build for ${{ matrix.scenario }}
         run: |
