@@ -1,5 +1,3 @@
-# 공통 패키지 설치
----
 common_packages:
   - curl
   - unzip
