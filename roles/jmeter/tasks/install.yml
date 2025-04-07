@@ -26,9 +26,3 @@
     dest: /opt/jmeter
     remote_src: yes
     extra_opts: [--strip-components=1]
-
-- name: Copy CloudWatch Agent config
-  template:
-    src: amazon-cloudwatch-agent.json.j2
-    dest: /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
-    mode: '0644'
