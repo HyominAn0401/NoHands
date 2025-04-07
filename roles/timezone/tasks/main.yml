@@ -1,0 +1,4 @@
+# 타임존 설정
+- name: Set timezone to Asia/Seoul
+  timezone:
+    name: Asia/Seoul
