@@ -51,3 +51,40 @@ jobs:
             -e AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} \
             packer-ansible-builder \
             packer build $PACKER_VARS aws-ubuntu.pkr.hcl
+
+      - name: Extract AMI ID from Packer output
+        id: extract-ami
+        run: |
+          AMI_ID=$(docker run --rm \
+            -v ${{ github.workspace }}:/workspace \
+            -v ${{ github.workspace }}/.packer-plugins:/root/.config/packer/plugins \
+            -w /workspace/${{ matrix.scenario }} \
+            -e AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} \
+            -e AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} \
+            packer-ansible-builder \
+            packer build -machine-readable $PACKER_VARS aws-ubuntu.pkr.hcl | \
+            grep 'artifact,0,id' | cut -d, -f6 | cut -d: -f2)
+
+          echo "AMI_ID=$AMI_ID"
+          echo "AMI_ID=$AMI_ID" >> $GITHUB_ENV
+
+      - name: Update Launch Template with new AMI
+        run: |
+          aws ec2 create-launch-template-version \
+            --launch-template-name "lt-0f8fcdfe6f83782af" \
+            --source-version \$Latest \
+            --launch-template-data "{\"ImageId\":\"$AMI_ID\"}" \
+            --region ap-northeast-2
+
+          aws ec2 modify-launch-template \
+            --launch-template-name "NoHandsLaunchTemplate" \
+            --default-version \$Latest \
+            --region ap-northeast-2
+
+      - name: Trigger ASG Rolling Update
+        run: |
+          aws autoscaling start-instance-refresh \
+            --auto-scaling-group-name "NoHands_final_ASG" \
+            --strategy Rolling \
+            --preferences '{"MinHealthyPercentage": 100, "InstanceWarmup": 60}' \
+            --region ap-northeast-2
