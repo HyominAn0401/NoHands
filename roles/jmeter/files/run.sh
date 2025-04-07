@@ -1,7 +1,7 @@
 #!/bin/bash
 export HEAP="-Xms128m -Xmx256m"
 
-# report 디렉터리 있으면 삭제
+[ -f /opt/jmeter/result.jtl ] && rm -f /opt/jmeter/result.jtl
 [ -d /opt/jmeter/report ] && rm -rf /opt/jmeter/report
 
 /opt/jmeter/bin/jmeter -n \

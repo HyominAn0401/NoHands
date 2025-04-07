@@ -3,7 +3,7 @@
 
 - name: Copy CloudWatch Agent config
   template:
-    src: cloudwatch-config.json.j2
+    src: amazon-cloudwatch-agent.json.j2
     dest: /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
     mode: '0644'
 
@@ -15,8 +15,9 @@
     -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
     -s
   register: cloudwatch_agent_status
-  changed_when: "'success' in cloudwatch_agent_status.stdout"
+  changed_when: "'success' in cloudwatch_agent_status.stdout or 'Configuration validation succeeded' in cloudwatch_agent_status.stdout"
 
 - name: Show CloudWatch Agent status
   debug:
     var: cloudwatch_agent_status.stdout_lines
+
