@@ -41,7 +41,8 @@ jobs:
             packer-ansible-builder \
             packer init .
 
-      - name: Run Packer Build for ${{ matrix.scenario }}
+      - name: Run Packer Build for ${{ matrix.scenario }} and capture AMI ID
+        id: packer-build
         run: |
           docker run --rm \
             -v ${{ github.workspace }}:/workspace \
@@ -50,28 +51,17 @@ jobs:
             -e AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} \
             -e AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} \
             packer-ansible-builder \
-            packer build $PACKER_VARS aws-ubuntu.pkr.hcl
+            packer build -machine-readable $PACKER_VARS aws-ubuntu.pkr.hcl \
+            | tee packer-output.log
 
-      - name: Extract AMI ID from Packer output
-        id: extract-ami
-        run: |
-          AMI_ID=$(docker run --rm \
-            -v ${{ github.workspace }}:/workspace \
-            -v ${{ github.workspace }}/.packer-plugins:/root/.config/packer/plugins \
-            -w /workspace/${{ matrix.scenario }} \
-            -e AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} \
-            -e AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} \
-            packer-ansible-builder \
-            packer build -machine-readable $PACKER_VARS aws-ubuntu.pkr.hcl | \
-            grep 'artifact,0,id' | cut -d, -f6 | cut -d: -f2)
-
+          AMI_ID=$(grep 'artifact,0,id' packer-output.log | cut -d, -f6 | cut -d: -f2)
           echo "AMI_ID=$AMI_ID"
           echo "AMI_ID=$AMI_ID" >> $GITHUB_ENV
 
       - name: Update Launch Template with new AMI
         run: |
           aws ec2 create-launch-template-version \
-            --launch-template-name "lt-0f8fcdfe6f83782af" \
+            --launch-template-name "NoHandsLaunchTemplate" \
             --source-version \$Latest \
             --launch-template-data "{\"ImageId\":\"$AMI_ID\"}" \
             --region ap-northeast-2
@@ -84,7 +74,13 @@ jobs:
       - name: Trigger ASG Rolling Update
         run: |
           aws autoscaling start-instance-refresh \
-            --auto-scaling-group-name "NoHands_final_ASG" \
+            --auto-scaling-group-name "NoHands-ASG" \
             --strategy Rolling \
             --preferences '{"MinHealthyPercentage": 100, "InstanceWarmup": 60}' \
+            --region ap-northeast-2
+
+      - name: Check ASG Rolling Update Status
+        run: |
+          aws autoscaling describe-instance-refreshes \
+            --auto-scaling-group-name "NoHands-ASG" \
             --region ap-northeast-2
