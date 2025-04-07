@@ -4,5 +4,5 @@
   roles:
     - cloudwatch
     - jmeter
-    - common/httpd
+    - common
     
