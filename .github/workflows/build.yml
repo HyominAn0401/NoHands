@@ -1,4 +1,4 @@
-name: Create AMI
+name: Create NoHands AMIs
 
 on:
   push:
@@ -30,4 +30,8 @@ jobs:
             -e AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} \
             -e AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} \
             packer-ansible-builder \
-            packer build -var-file=aws-ubuntu.pkrvars.hcl aws-ubuntu.pkr.hcl
+            packer build \
+              -var "subnet_id=${{ secrets.SUBNET_ID }}" \
+              -var "security_group_id=${{ secrets.SECURITY_GROUP_ID }}" \
+              -var "vpc_id=${{ secrets.VPC_ID }}" \
+              aws-ubuntu.pkr.hcl

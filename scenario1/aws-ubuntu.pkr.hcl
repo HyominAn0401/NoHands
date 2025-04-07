@@ -11,10 +11,6 @@ packer {
   }
 }
 
-variable "base_ami" {
-  type = string
-}
-
 variable "subnet_id" {
   type = string
 }
@@ -23,18 +19,10 @@ variable "security_group_id" {
   type = string
 }
 
-variable "region" {
-  type = string
-}
-
-variable "instance_type" {
-  type = string
-}
-
 source "amazon-ebs" "ubuntu" {
-  region                     = var.region
-  source_ami                 = var.base_ami
-  instance_type              = var.instance_type
+  region                     = "ap-northeast-2"
+  source_ami                 = "ami-05a7f3469a7653972"
+  instance_type              = "t2.micro"
   ami_name                   = "nohands-ami1-{{timestamp}}"
   ssh_username               = "ubuntu"
   subnet_id                  = var.subnet_id
