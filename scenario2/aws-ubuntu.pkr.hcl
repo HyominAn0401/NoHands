@@ -19,6 +19,10 @@ variable "vpc_id" {
   type = string
 }
 
+variable "log_group_name" {
+  type = string
+}
+
 source "amazon-ebs" "ubuntu" {
   ami_name      = "nohands-ami2-{{timestamp}}"
   instance_type = "t3.small"
