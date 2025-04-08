@@ -13,7 +13,7 @@
     state: directory
     mode: '0755'
 
-# JMeter 다운로드드
+# JMeter 다운로드
 - name: Download Apache JMeter
   get_url:
     url: https://downloads.apache.org//jmeter/binaries/apache-jmeter-5.6.3.tgz

@@ -1,5 +1,5 @@
 - name: JMeter, CloudWatch Role
-  hosts: all
+  hosts: localhost
   become: true
   roles:
     - cloudwatch
