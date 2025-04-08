@@ -27,9 +27,9 @@ jobs:
         id: set-vars
         run: |
           if [ "${{ matrix.scenario }}" = "scenario1" ]; then
-            echo 'PACKER_VARS=-var subnet_id="[\"subnet-019608237d32bd1b0\",\"subnet-0bd55d549c99d86ed\"]" -var security_group_id="[\"sg-abc123\"]" -var log_group_name=perf-tests-scenario1' >> $GITHUB_ENV
+            echo 'PACKER_VARS=-var=subnet_id=\[\"subnet-019608237d32bd1b0\",\"subnet-0bd55d549c99d86ed\"\] -var=security_group_id=\[\"sg-abc123\"\] -var=log_group_name=perf-tests-scenario1' >> $GITHUB_ENV
           else
-            echo 'PACKER_VARS=-var subnet_id="[\"subnet-019608237d32bd1b0\",\"subnet-0bd55d549c99d86ed\"]" -var vpc_id="vpc-abc123" -var log_group_name=perf-tests-scenario2' >> $GITHUB_ENV
+            echo 'PACKER_VARS=-var=subnet_id=\[\"subnet-019608237d32bd1b0\",\"subnet-0bd55d549c99d86ed\"\] -var=vpc_id=\"vpc-abc123\" -var=log_group_name=perf-tests-scenario2' >> $GITHUB_ENV
           fi
 
 
@@ -45,6 +45,8 @@ jobs:
       - name: Run Packer Build and capture AMI ID
         id: packer-build
         run: |
+          echo "🧪 PACKER_VARS=$PACKER_VARS"
+
           docker run --rm \
             -v ${{ github.workspace }}:/workspace \
             -v ${{ github.workspace }}/.packer-plugins:/root/.config/packer/plugins \
