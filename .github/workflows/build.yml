@@ -59,22 +59,44 @@ jobs:
           AMI_ID=$(grep 'artifact,0,id' packer-output.log | cut -d, -f6 | cut -d: -f2)
           echo "AMI_ID=$AMI_ID"
           echo "AMI_ID=$AMI_ID" >> $GITHUB_ENV
-
-      - name: Create New Launch Template
+      
+      - name : Create New Launch Template 
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ap-northeast-2
         run: |
-          aws ec2 create-launch-template-version \
-            --launch-template-name "NoHands_final_tp" \
-            --source-version \$Latest \
-            --launch-template-data "{\"ImageId\":\"$AMI_ID\"}" \
-            --region ap-northeast-2
+          LT_NAME="NoHands_final_tp"
 
-          aws ec2 modify-launch-template \
-            --launch-template-name "NoHands_final_tp" \
-            --default-version \$Latest \
-            --region ap-northeast-2
+          echo "🔍 Checking if Launch Template $LT_NAME exists..."
+          LT_EXISTS=$(aws ec2 describe-launch-templates \
+            --launch-template-names "$LT_NAME" \
+            --region $AWS_REGION \
+            --query "LaunchTemplates[0].LaunchTemplateName" \
+            --output text || echo "NOT_FOUND")
+
+          if [ "$LT_EXISTS" = "$LT_NAME" ]; then
+            echo "✅ Launch Template exists. Creating new version..."
+
+            aws ec2 create-launch-template-version \
+              --launch-template-name "$LT_NAME" \
+              --source-version \$Latest \
+              --launch-template-data "{\"ImageId\":\"$AMI_ID\"}" \
+              --region $AWS_REGION
+
+            aws ec2 modify-launch-template \
+              --launch-template-name "$LT_NAME" \
+              --default-version \$Latest \
+              --region $AWS_REGION
+          else
+            echo "🚀 Launch Template not found. Creating new one..."
+
+            aws ec2 create-launch-template \
+              --launch-template-name "$LT_NAME" \
+              --version-description "Initial version" \
+              --launch-template-data "{\"ImageId\":\"$AMI_ID\", \"InstanceType\":\"t3.small\"}" \
+              --region $AWS_REGION
+          fi
 
       - name: Create ASG if not exists, otherwise update
         env:
@@ -109,6 +131,23 @@ jobs:
               --health-check-grace-period 60 \
               --region $AWS_REGION
           fi
+
+
+      - name: Update Launch Template with new AMI
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          aws ec2 create-launch-template-version \
+            --launch-template-name "NoHands_final_tp" \
+            --source-version \$Latest \
+            --launch-template-data "{\"ImageId\":\"$AMI_ID\"}" \
+            --region ap-northeast-2
+
+          aws ec2 modify-launch-template \
+            --launch-template-name "NoHands_final_tp" \
+            --default-version \$Latest \
+            --region ap-northeast-2
 
       - name: Trigger ASG Rolling Update
         env:
