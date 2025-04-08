@@ -8,10 +8,7 @@ on:
 jobs:
   build-ami:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        scenario: [scenario1, scenario2]
-    name: Build AMI for ${{ matrix.scenario }}
+    name: Build AMI for scenario2
 
     steps:
       - name: Checkout repository
@@ -24,21 +21,15 @@ jobs:
         run: docker build -t packer-ansible-builder .
 
       - name: Set Packer Vars
-        id: set-vars
         run: |
-          if [ "${{ matrix.scenario }}" = "scenario1" ]; then
-            echo 'PACKER_VARS="-var subnet_id=[\"subnet-019608237d32bd1b0\",\"subnet-0bd55d549c99d86ed\"] -var security_group_id=[\"sg-abc123\"] -var log_group_name=perf-tests-scenario1"' >> $GITHUB_ENV
-          else
-            echo 'PACKER_VARS="-var subnet_id=[\"subnet-019608237d32bd1b0\",\"subnet-0bd55d549c99d86ed\"] -var vpc_id=vpc-abc123 -var log_group_name=perf-tests-scenario2"' >> $GITHUB_ENV
-          fi
-
+          echo 'PACKER_VARS=-var subnet_id=${{ secrets.SUBNET_ID }} -var vpc_id=${{ secrets.VPC_ID }}' >> $GITHUB_ENV
 
       - name: Initialize Packer Plugins
         run: |
           docker run --rm \
             -v ${{ github.workspace }}:/workspace \
             -v ${{ github.workspace }}/.packer-plugins:/root/.config/packer/plugins \
-            -w /workspace/${{ matrix.scenario }} \
+            -w /workspace/scenario2 \
             packer-ansible-builder \
             packer init .
 
@@ -50,7 +41,7 @@ jobs:
           docker run --rm \
             -v ${{ github.workspace }}:/workspace \
             -v ${{ github.workspace }}/.packer-plugins:/root/.config/packer/plugins \
-            -w /workspace/${{ matrix.scenario }} \
+            -w /workspace/scenario2 \
             -e AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} \
             -e AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} \
             packer-ansible-builder \
@@ -67,7 +58,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ap-northeast-2
         run: |
-          LT_NAME="NoHands_final_tp_${{ matrix.scenario }}"
+          LT_NAME="NoHands_final_tp_scenario2"
 
           aws ec2 create-launch-template-version \
             --launch-template-name "$LT_NAME" \
@@ -91,8 +82,8 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ap-northeast-2
         run: |
-          ASG_NAME="NoHands_final_ASG_${{ matrix.scenario }}"
-          LT_NAME="NoHands_final_tp_${{ matrix.scenario }}"
+          ASG_NAME="NoHands_final_ASG_scenario2"
+          LT_NAME="NoHands_final_tp_scenario2"
 
           ASG_EXISTS=$(aws autoscaling describe-auto-scaling-groups \
             --auto-scaling-group-names "$ASG_NAME" \
@@ -103,62 +94,3 @@ jobs:
           if [ "$ASG_EXISTS" = "$ASG_NAME" ]; then
             echo "✅ ASG exists, skipping creation."
           else
-            echo "🚀 Creating new ASG: $ASG_NAME"
-            aws autoscaling create-auto-scaling-group \
-              --auto-scaling-group-name "$ASG_NAME" \
-              --launch-template "LaunchTemplateName=$LT_NAME" \
-              --min-size 1 \
-              --max-size 4 \
-              --desired-capacity 1 \
-              --vpc-zone-identifier "${{ secrets.SUBNET_ID }}" \
-              --health-check-type EC2 \
-              --health-check-grace-period 60 \
-              --region $AWS_REGION
-          fi
-
-      - name: Trigger ASG Rolling Update
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: |
-          ASG_NAME="NoHands_final_ASG_${{ matrix.scenario }}"
-          aws autoscaling start-instance-refresh \
-            --auto-scaling-group-name "$ASG_NAME" \
-            --strategy Rolling \
-            --preferences '{"MinHealthyPercentage": 100, "InstanceWarmup": 60}' \
-            --region ap-northeast-2
-
-      - name: Check ASG Rolling Update Status
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: |
-          ASG_NAME="NoHands_final_ASG_${{ matrix.scenario }}"
-          aws autoscaling describe-instance-refreshes \
-            --auto-scaling-group-name "$ASG_NAME" \
-            --region ap-northeast-2
-
-      - name: Clean up old Launch Template versions
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ap-northeast-2
-        run: |
-          LT_NAME="NoHands_final_tp_${{ matrix.scenario }}"
-          echo "🧹 Cleaning up old Launch Template versions for $LT_NAME..."
-
-          OLD_VERSIONS=$(aws ec2 describe-launch-template-versions \
-            --launch-template-name "$LT_NAME" \
-            --region $AWS_REGION \
-            --query 'LaunchTemplateVersions[?DefaultVersion==`false`].VersionNumber' \
-            --output text)
-
-          if [ -n "$OLD_VERSIONS" ]; then
-            echo "🗑️ Deleting versions: $OLD_VERSIONS"
-            aws ec2 delete-launch-template-versions \
-              --launch-template-name "$LT_NAME" \
-              --versions $OLD_VERSIONS \
-              --region $AWS_REGION
-          else
-            echo "✅ No old versions to delete."
-          fi
