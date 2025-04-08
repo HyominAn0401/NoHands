@@ -8,6 +8,3 @@
 - name: Install CloudWatch Agent
   become: true
   command: dpkg -i /tmp/amazon-cloudwatch-agent.deb
-  # apt:
-  #   deb: /home/ubuntu/amazon-cloudwatch-agent.deb
-  #   state: present
