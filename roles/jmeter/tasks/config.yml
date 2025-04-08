@@ -1,8 +1,11 @@
-- name: Copy test_plan.jmx
-  copy:
-    src: test_plan.jmx
+- name: Create symbolic link for noHands.jmx
+  become: true
+  file:
+    src: /opt/jmeter/test_plan.jmx
     dest: /opt/jmeter/noHands.jmx
-    mode: '0644'
+    state: link
+    force: true
+
 
 - name: Copy run.sh script
   copy:
