@@ -1,4 +1,4 @@
-name: Create NoHands AMI
+name: Create NoHands AMIs
 
 on:
   push:
@@ -22,7 +22,7 @@ jobs:
 
       - name: Set Packer Vars
         run: |
-          echo 'PACKER_VARS=-var subnet_id=${{ secrets.SUBNET_ID }} -var vpc_id=${{ secrets.VPC_ID }} -var log_group_name=${{ secrets.LOG_GROUP_NAME }}' >> $GITHUB_ENV
+          echo 'PACKER_VARS=-var subnet_id=${{ secrets.SUBNET_ID }} -var vpc_id=${{ secrets.VPC_ID }}' >> $GITHUB_ENV
 
       - name: Initialize Packer Plugins
         run: |
@@ -52,39 +52,14 @@ jobs:
           echo "AMI_ID=$AMI_ID"
           echo "AMI_ID=$AMI_ID" >> $GITHUB_ENV
 
-      - name: Create or Update Launch Template
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ap-northeast-2
-        run: |
-          LT_NAME="NoHands_final_tp_scenario2"
-
-          echo "📦 Updating Launch Template: $LT_NAME"
-
-          aws ec2 create-launch-template-version \
-            --launch-template-name "$LT_NAME" \
-            --source-version \$Latest \
-            --launch-template-data "{\"ImageId\":\"$AMI_ID\"}" \
-            --region $AWS_REGION || \
-          aws ec2 create-launch-template \
-            --launch-template-name "$LT_NAME" \
-            --version-description "Initial" \
-            --launch-template-data "{\"ImageId\":\"$AMI_ID\", \"InstanceType\":\"t3.small\"}" \
-            --region $AWS_REGION
-
-          aws ec2 modify-launch-template \
-            --launch-template-name "$LT_NAME" \
-            --default-version \$Latest \
-            --region $AWS_REGION
-
-      - name: Trigger ASG Rolling Update (only if ASG exists)
+      - name: Conditionally Update Launch Template and Trigger Rolling Update
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ap-northeast-2
         run: |
           ASG_NAME="NoHands_final_ASG_scenario2"
+          LT_NAME="NoHands_final_tp_scenario2"
 
           echo "🔍 Checking if ASG exists: $ASG_NAME"
 
@@ -95,38 +70,31 @@ jobs:
             --output text || echo "NOT_FOUND")
 
           if [ "$ASG_EXISTS" = "$ASG_NAME" ]; then
-            echo "✅ ASG exists. Triggering rolling update..."
+            echo "✅ ASG exists. Proceeding with Launch Template update and rolling update..."
 
+            # Launch Template Update
+            aws ec2 create-launch-template-version \
+              --launch-template-name "$LT_NAME" \
+              --source-version \$Latest \
+              --launch-template-data "{\"ImageId\":\"$AMI_ID\"}" \
+              --region $AWS_REGION || \
+            aws ec2 create-launch-template \
+              --launch-template-name "$LT_NAME" \
+              --version-description "Initial" \
+              --launch-template-data "{\"ImageId\":\"$AMI_ID\", \"InstanceType\":\"t3.small\"}" \
+              --region $AWS_REGION
+
+            aws ec2 modify-launch-template \
+              --launch-template-name "$LT_NAME" \
+              --default-version \$Latest \
+              --region $AWS_REGION
+
+            # Rolling Update
             aws autoscaling start-instance-refresh \
               --auto-scaling-group-name "$ASG_NAME" \
               --strategy Rolling \
               --preferences '{"MinHealthyPercentage": 100, "InstanceWarmup": 60}' \
               --region $AWS_REGION
           else
-            echo "⚠️ ASG not found. Skipping rolling update."
-          fi
-
-      - name: Clean up old Launch Template versions
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ap-northeast-2
-        run: |
-          LT_NAME="NoHands_final_tp_scenario2"
-          echo "🧹 Cleaning up old Launch Template versions for $LT_NAME..."
-
-          OLD_VERSIONS=$(aws ec2 describe-launch-template-versions \
-            --launch-template-name "$LT_NAME" \
-            --region $AWS_REGION \
-            --query 'LaunchTemplateVersions[?DefaultVersion==`false`].VersionNumber' \
-            --output text)
-
-          if [ -n "$OLD_VERSIONS" ]; then
-            echo "🗑️ Deleting versions: $OLD_VERSIONS"
-            aws ec2 delete-launch-template-versions \
-              --launch-template-name "$LT_NAME" \
-              --versions $OLD_VERSIONS \
-              --region $AWS_REGION
-          else
-            echo "✅ No old versions to delete."
+            echo "⚠️ ASG not found. Skipping Launch Template update and rolling update."
           fi
