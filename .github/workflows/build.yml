@@ -103,7 +103,7 @@ jobs:
             aws autoscaling create-auto-scaling-group \
               --auto-scaling-group-name "$ASG_NAME" \
               --launch-template "LaunchTemplateName=$LT_NAME" \
-              --min-size 2 \
+              --min-size 1 \
               --max-size 4 \
               --desired-capacity 1 \
               --vpc-zone-identifier "${{ secrets.SUBNET_ID }}" \
