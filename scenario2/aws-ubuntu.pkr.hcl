@@ -53,7 +53,5 @@ source "amazon-ebs" "ubuntu" {
       "-e", "ANSIBLE_ROLES_PATH=../roles",
       "-e", "ANSIBLE_REMOTE_TEMP=/tmp/ansible-remote"
     ]
-  
-    host_alias = "default"
   }
 }
