@@ -26,9 +26,9 @@ jobs:
       - name: Set Packer Vars
         run: |
           if [ "${{ matrix.scenario }}" = "scenario1" ]; then
-            echo 'PACKER_VARS=-var subnet_id=${{ secrets.SUBNET_ID }} -var security_group_id=${{ secrets.SECURITY_GROUP_ID }} -var log_group_name=perf-tests-scenario1' >> $GITHUB_ENV
+            echo "PACKER_VARS=-var 'subnet_id=${{ secrets.SUBNET_ID }}' -var 'security_group_id=${{ secrets.SECURITY_GROUP_ID }}' -var 'log_group_name=perf-tests-scenario1'" >> $GITHUB_ENV
           else
-            echo 'PACKER_VARS=-var subnet_id=${{ secrets.SUBNET_ID }} -var vpc_id=${{ secrets.VPC_ID }} -var log_group_name=perf-tests-scenario2' >> $GITHUB_ENV
+            echo "PACKER_VARS=-var 'subnet_id=${{ secrets.SUBNET_ID }}' -var 'vpc_id=${{ secrets.VPC_ID }}' -var 'log_group_name=perf-tests-scenario2'" >> $GITHUB_ENV
           fi
 
       - name: Initialize Packer Plugins
