@@ -19,10 +19,6 @@ variable "security_group_id" {
   type = string
 }
 
-variable "log_group_name" {
-  type = string
-}
-
 source "amazon-ebs" "ubuntu" {
   region                     = "ap-northeast-2"
   source_ami                 = "ami-05a7f3469a7653972"
