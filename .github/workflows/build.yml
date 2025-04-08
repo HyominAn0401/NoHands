@@ -57,6 +57,41 @@ jobs:
           AMI_ID=$(grep 'artifact,0,id' packer-output.log | cut -d, -f6 | cut -d: -f2)
           echo "AMI_ID=$AMI_ID"
           echo "AMI_ID=$AMI_ID" >> $GITHUB_ENV
+      
+      - name: Create ASG if not exists, otherwise update
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ap-northeast-2
+        run: |
+          ASG_NAME="NoHands_final_ASG"
+          LT_NAME="NoHands_final_tp"
+
+          echo "🔍 Checking if ASG $ASG_NAME exists..."
+
+          ASG_EXISTS=$(aws autoscaling describe-auto-scaling-groups \
+            --auto-scaling-group-names "$ASG_NAME" \
+            --region $AWS_REGION \
+            --query "AutoScalingGroups[0].AutoScalingGroupName" \
+            --output text || echo "NOT_FOUND")
+
+          if [ "$ASG_EXISTS" = "NoHands_final_ASG" ]; then
+            echo "✅ ASG exists, skipping creation."
+          else
+            echo "🚀 ASG not found. Creating new one..."
+
+            aws autoscaling create-auto-scaling-group \
+              --auto-scaling-group-name "$ASG_NAME" \
+              --launch-template "LaunchTemplateName=$LT_NAME,Version=1" \
+              --min-size 1 \
+              --max-size 4 \
+              --desired-capacity 1 \
+              --vpc-zone-identifier "${{ secrets.SUBNET_IDS }}" \
+              --health-check-type EC2 \
+              --health-check-grace-period 60 \
+              --region $AWS_REGION
+          fi
+
 
       - name: Update Launch Template with new AMI
         env:
