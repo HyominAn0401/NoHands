@@ -22,7 +22,7 @@ variable "security_group_id" {
 source "amazon-ebs" "ubuntu" {
   region                     = "ap-northeast-2"
   source_ami                 = "ami-05a7f3469a7653972"
-  instance_type              = "t2.micro"
+  instance_type              = "t3.small"
   ami_name                   = "nohands-ami1-{{timestamp}}"
   ssh_username               = "ubuntu"
   subnet_id                  = var.subnet_id
@@ -36,10 +36,10 @@ build {
 
   provisioner "ansible" {
     playbook_file = "./playbook.yml"
-    extra_arguments  = ["--user=ubuntu", "--become"]
+    extra_arguments  = ["--user=ubuntu", "--become", "--extra-vars", "log_group_name=${env("LOG_GROUP_NAME")}"]
     ansible_env_vars = [
-      "ANSIBLE_ROLES_PATH=/workspace/roles",
-    "ANSIBLE_REMOTE_TEMP=/tmp/ansible-remote"
+      "ANSIBLE_ROLES_PATH=../roles",
+      "ANSIBLE_REMOTE_TEMP=/tmp/ansible-remote"
     ]
   }
 }
