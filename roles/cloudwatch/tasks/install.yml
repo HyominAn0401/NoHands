@@ -1,3 +1,7 @@
+- name: DEBUG - 수정
+  debug:
+    msg: "진짜 수정함"
+
 - name: Download CloudWatch Agent installer
   become: yes
   get_url:
@@ -8,3 +12,6 @@
 - name: Install CloudWatch Agent
   become: true
   command: dpkg -i /tmp/amazon-cloudwatch-agent.deb
+  # apt:
+  #   deb: /tmp/amazon-cloudwatch-agent.deb
+  #   state: present
