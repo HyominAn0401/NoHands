@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        scenario: [scenario1, scenario2]
+        scenario: [scenario2]
     name: Build AMI for ${{ matrix.scenario }}
 
     steps:
