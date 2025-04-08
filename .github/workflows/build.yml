@@ -6,9 +6,14 @@ on:
       - main
 
 jobs:
-  build-ami-scenario1:
+  build-ami:
     runs-on: ubuntu-latest
-    name: Build AMI for scenario1
+    strategy:
+      matrix:
+        scenario:
+          - scenario1
+          - scenario2
+    name: Build AMI for ${{ matrix.scenario }}
 
     steps:
       - name: Checkout repository
@@ -22,252 +27,67 @@ jobs:
 
       - name: Set Packer Vars
         run: |
-          echo 'PACKER_VARS=-var subnet_id=${{ secrets.SUBNET_ID }} -var security_group_id=${{ secrets.SECURITY_GROUP_ID }} -var log_group_name=perf-tests-scenario1' >> $GITHUB_ENV
+          if [[ "${{ matrix.scenario }}" == "scenario1" ]]; then
+            echo 'PACKER_VARS=-var subnet_id=${{ secrets.SUBNET_ID }} -var security_group_id=${{ secrets.SECURITY_GROUP_ID }} -var log_group_name=perf-tests-scenario1' >> $GITHUB_ENV
+          else
+            echo 'PACKER_VARS=-var subnet_id=${{ secrets.SUBNET_ID }} -var vpc_id=${{ secrets.VPC_ID }} -var log_group_name=perf-tests-scenario2' >> $GITHUB_ENV
+          fi
 
       - name: Initialize Packer Plugins
         run: |
           docker run --rm \
             -v ${{ github.workspace }}:/workspace \
             -v ${{ github.workspace }}/.packer-plugins:/root/.config/packer/plugins \
-            -w /workspace/scenario1 \
+            -w /workspace/${{ matrix.scenario }} \
             packer-ansible-builder \
             packer init .
 
-      - name: Run Packer Build and capture AMI ID
+      - name: Run Packer Build
         id: packer-build
         run: |
           docker run --rm \
             -v ${{ github.workspace }}:/workspace \
             -v ${{ github.workspace }}/.packer-plugins:/root/.config/packer/plugins \
-            -w /workspace/scenario1 \
+            -w /workspace/${{ matrix.scenario }} \
             -e AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} \
             -e AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} \
             packer-ansible-builder \
             packer build -machine-readable $PACKER_VARS aws-ubuntu.pkr.hcl \
             | tee packer-output.log
-
           AMI_ID=$(grep 'artifact,0,id' packer-output.log | cut -d, -f6 | cut -d: -f2)
-          echo "AMI_ID=$AMI_ID"
           echo "AMI_ID=$AMI_ID" >> $GITHUB_ENV
 
-      - name : Create New Launch Template 
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ap-northeast-2
+      - name: Create / Update Launch Template
         run: |
-          LT_NAME="NoHands_final_tp"
-
-          echo "🔍 Checking if Launch Template $LT_NAME exists..."
-          LT_EXISTS=$(aws ec2 describe-launch-templates \
-            --launch-template-names "$LT_NAME" \
-            --region $AWS_REGION \
-            --query "LaunchTemplates[0].LaunchTemplateName" \
-            --output text || echo "NOT_FOUND")
-
-          if [ "$LT_EXISTS" = "$LT_NAME" ]; then
-            echo "✅ Launch Template exists. Creating new version..."
-
-            aws ec2 create-launch-template-version \
-              --launch-template-name "$LT_NAME" \
-              --source-version \$Latest \
-              --launch-template-data "{\"ImageId\":\"$AMI_ID\"}" \
-              --region $AWS_REGION
-
-            aws ec2 modify-launch-template \
-              --launch-template-name "$LT_NAME" \
-              --default-version \$Latest \
-              --region $AWS_REGION
-          else
-            echo "🚀 Launch Template not found. Creating new one..."
-
-            aws ec2 create-launch-template \
-              --launch-template-name "$LT_NAME" \
-              --version-description "Initial version" \
-              --launch-template-data "{\"ImageId\":\"$AMI_ID\", \"InstanceType\":\"t3.small\"}" \
-              --region $AWS_REGION
-          fi
-
-      - name: Create ASG if not exists, otherwise update
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ap-northeast-2
-          VPC_ZONE_ID: ${{ secrets.SUBNET_ID }}
-          
-        run: |
-          ASG_NAME="NoHands_final_ASG"
-          LT_NAME="NoHands_final_tp"
-
-          echo "🔍 Checking if ASG $ASG_NAME exists..."
-
-          ASG_EXISTS=$(aws autoscaling describe-auto-scaling-groups \
-            --auto-scaling-group-names "$ASG_NAME" \
-            --region $AWS_REGION \
-            --query "AutoScalingGroups[0].AutoScalingGroupName" \
-            --output text || echo "NOT_FOUND")
-
-          if [ "$ASG_EXISTS" = "NoHands_final_ASG" ]; then
-            echo "✅ ASG exists, skipping creation."
-          else
-            echo "🚀 ASG not found. Creating new one..."
-
-            aws autoscaling create-auto-scaling-group \
-              --auto-scaling-group-name "$ASG_NAME" \
-              --launch-template "LaunchTemplateName=$LT_NAME,Version=1" \
-              --min-size 2 \
-              --max-size 4 \
-              --desired-capacity 1 \
-              --vpc-zone-identifier "${{ secrets.SUBNET_ID }}" \
-              --health-check-type EC2 \
-              --health-check-grace-period 60 \
-              --region $AWS_REGION
-          fi
-
-
-      - name: Update Launch Template with new AMI
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: |
+          LT_NAME="NoHands_final_tp_${{ matrix.scenario }}"
           aws ec2 create-launch-template-version \
-            --launch-template-name "NoHands_final_tp" \
+            --launch-template-name "$LT_NAME" \
             --source-version \$Latest \
             --launch-template-data "{\"ImageId\":\"$AMI_ID\"}" \
+            --region ap-northeast-2 || \
+          aws ec2 create-launch-template \
+            --launch-template-name "$LT_NAME" \
+            --version-description "Initial" \
+            --launch-template-data "{\"ImageId\":\"$AMI_ID\", \"InstanceType\":\"t3.small\"}" \
             --region ap-northeast-2
-
           aws ec2 modify-launch-template \
-            --launch-template-name "NoHands_final_tp" \
+            --launch-template-name "$LT_NAME" \
             --default-version \$Latest \
             --region ap-northeast-2
 
-      - name: Trigger ASG Rolling Update
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - name: Create ASG if not exists
         run: |
-          aws autoscaling start-instance-refresh \
-            --auto-scaling-group-name "NoHands_final_ASG" \
-            --strategy Rolling \
-            --preferences '{"MinHealthyPercentage": 100, "InstanceWarmup": 60}' \
-            --region ap-northeast-2
-
-      - name: Check ASG Rolling Update Status
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: |
-          aws autoscaling describe-instance-refreshes \
-            --auto-scaling-group-name "NoHands_final_ASG" \
-            --region ap-northeast-2
-
-  build-ami-scenario2:
-    runs-on: ubuntu-latest
-    name: Build AMI for scenario2
-    needs: build-ami-scenario1
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Set up Docker
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build Docker image for Packer + Ansible
-        run: docker build -t packer-ansible-builder .
-
-      - name: Set Packer Vars
-        run: |
-          echo 'PACKER_VARS=-var subnet_id=${{ secrets.SUBNET_ID }} -var vpc_id=${{ secrets.VPC_ID }} -var log_group_name=perf-tests-scenario2' >> $GITHUB_ENV
-
-      - name: Initialize Packer Plugins
-        run: |
-          docker run --rm \
-            -v ${{ github.workspace }}:/workspace \
-            -v ${{ github.workspace }}/.packer-plugins:/root/.config/packer/plugins \
-            -w /workspace/scenario2 \
-            packer-ansible-builder \
-            packer init .
-
-      - name: Run Packer Build and capture AMI ID
-        id: packer-build
-        run: |
-          docker run --rm \
-            -v ${{ github.workspace }}:/workspace \
-            -v ${{ github.workspace }}/.packer-plugins:/root/.config/packer/plugins \
-            -w /workspace/scenario2 \
-            -e AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} \
-            -e AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} \
-            packer-ansible-builder \
-            packer build -machine-readable $PACKER_VARS aws-ubuntu.pkr.hcl \
-            | tee packer-output.log
-
-          AMI_ID=$(grep 'artifact,0,id' packer-output.log | cut -d, -f6 | cut -d: -f2)
-          echo "AMI_ID=$AMI_ID"
-          echo "AMI_ID=$AMI_ID" >> $GITHUB_ENV
-
-      - name : Create New Launch Template 
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ap-northeast-2
-        run: |
-          LT_NAME="NoHands_final_tp"
-
-          echo "🔍 Checking if Launch Template $LT_NAME exists..."
-          LT_EXISTS=$(aws ec2 describe-launch-templates \
-            --launch-template-names "$LT_NAME" \
-            --region $AWS_REGION \
-            --query "LaunchTemplates[0].LaunchTemplateName" \
-            --output text || echo "NOT_FOUND")
-
-          if [ "$LT_EXISTS" = "$LT_NAME" ]; then
-            echo "✅ Launch Template exists. Creating new version..."
-
-            aws ec2 create-launch-template-version \
-              --launch-template-name "$LT_NAME" \
-              --source-version \$Latest \
-              --launch-template-data "{\"ImageId\":\"$AMI_ID\"}" \
-              --region $AWS_REGION
-
-            aws ec2 modify-launch-template \
-              --launch-template-name "$LT_NAME" \
-              --default-version \$Latest \
-              --region $AWS_REGION
-          else
-            echo "🚀 Launch Template not found. Creating new one..."
-
-            aws ec2 create-launch-template \
-              --launch-template-name "$LT_NAME" \
-              --version-description "Initial version" \
-              --launch-template-data "{\"ImageId\":\"$AMI_ID\", \"InstanceType\":\"t3.small\"}" \
-              --region $AWS_REGION
-          fi
-
-      - name: Create ASG if not exists, otherwise update
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ap-northeast-2
-          VPC_ZONE_ID: ${{ secrets.SUBNET_ID }}
-          
-        run: |
-          ASG_NAME="NoHands_final_ASG"
-          LT_NAME="NoHands_final_tp"
-
-          echo "🔍 Checking if ASG $ASG_NAME exists..."
-
-          ASG_EXISTS=$(aws autoscaling describe-auto-scaling-groups \
+          ASG_NAME="NoHands_final_ASG_${{ matrix.scenario }}"
+          LT_NAME="NoHands_final_tp_${{ matrix.scenario }}"
+          EXISTS=$(aws autoscaling describe-auto-scaling-groups \
             --auto-scaling-group-names "$ASG_NAME" \
-            --region $AWS_REGION \
+            --region ap-northeast-2 \
             --query "AutoScalingGroups[0].AutoScalingGroupName" \
             --output text || echo "NOT_FOUND")
 
-          if [ "$ASG_EXISTS" = "NoHands_final_ASG" ]; then
-            echo "✅ ASG exists, skipping creation."
+          if [ "$EXISTS" = "$ASG_NAME" ]; then
+            echo "ASG exists. Skipping creation."
           else
-            echo "🚀 ASG not found. Creating new one..."
-
             aws autoscaling create-auto-scaling-group \
               --auto-scaling-group-name "$ASG_NAME" \
               --launch-template "LaunchTemplateName=$LT_NAME" \
@@ -276,46 +96,16 @@ jobs:
               --desired-capacity 1 \
               --vpc-zone-identifier "${{ secrets.SUBNET_ID }}" \
               --health-check-type EC2 \
-              --health-check-grace-period 60 \
-              --region $AWS_REGION
+              --region ap-northeast-2
           fi
 
-      - name: Update Launch Template with new AMI
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: |
-          aws ec2 create-launch-template-version \
-            --launch-template-name "NoHands_final_tp" \
-            --source-version \$Latest \
-            --launch-template-data "{\"ImageId\":\"$AMI_ID\"}" \
-            --region ap-northeast-2
-
-          aws ec2 modify-launch-template \
-            --launch-template-name "NoHands_final_tp" \
-            --default-version \$Latest \
-            --region ap-northeast-2
-
       - name: Trigger ASG Rolling Update
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
           aws autoscaling start-instance-refresh \
-            --auto-scaling-group-name "NoHands_final_ASG" \
+            --auto-scaling-group-name "NoHands_final_ASG_${{ matrix.scenario }}" \
             --strategy Rolling \
             --preferences '{"MinHealthyPercentage": 100, "InstanceWarmup": 60}' \
             --region ap-northeast-2
-
-      - name: Check ASG Rolling Update Status
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: |
-          aws autoscaling describe-instance-refreshes \
-            --auto-scaling-group-name "NoHands_final_ASG" \
-            --region ap-northeast-2
-
 
 # name: Create NoHands AMIs
 
@@ -325,12 +115,9 @@ jobs:
 #       - main
 
 # jobs:
-#   build-ami:
+#   build-ami-scenario1:
 #     runs-on: ubuntu-latest
-#     strategy:
-#       matrix:
-#         scenario: [scenario1, scenario2]
-#     name: Build AMI for ${{ matrix.scenario }}
+#     name: Build AMI for scenario1
 
 #     steps:
 #       - name: Checkout repository
@@ -343,30 +130,25 @@ jobs:
 #         run: docker build -t packer-ansible-builder .
 
 #       - name: Set Packer Vars
-#         id: set-vars
 #         run: |
-#           if [ "${{ matrix.scenario }}" = "scenario1" ]; then
-#             echo 'PACKER_VARS=-var subnet_id=${{ secrets.SUBNET_ID }} -var security_group_id=${{ secrets.SECURITY_GROUP_ID }} -var log_group_name=perf-tests-scenario1' >> $GITHUB_ENV
-#           else
-#             echo 'PACKER_VARS=-var subnet_id=${{ secrets.SUBNET_ID }} -var vpc_id=${{ secrets.VPC_ID }} -var log_group_name=perf-tests-scenario2' >> $GITHUB_ENV
-#           fi
+#           echo 'PACKER_VARS=-var subnet_id=${{ secrets.SUBNET_ID }} -var security_group_id=${{ secrets.SECURITY_GROUP_ID }} -var log_group_name=perf-tests-scenario1' >> $GITHUB_ENV
 
 #       - name: Initialize Packer Plugins
 #         run: |
 #           docker run --rm \
 #             -v ${{ github.workspace }}:/workspace \
 #             -v ${{ github.workspace }}/.packer-plugins:/root/.config/packer/plugins \
-#             -w /workspace/${{ matrix.scenario }} \
+#             -w /workspace/scenario1 \
 #             packer-ansible-builder \
 #             packer init .
 
-#       - name: Run Packer Build for ${{ matrix.scenario }} and capture AMI ID
+#       - name: Run Packer Build and capture AMI ID
 #         id: packer-build
 #         run: |
 #           docker run --rm \
 #             -v ${{ github.workspace }}:/workspace \
 #             -v ${{ github.workspace }}/.packer-plugins:/root/.config/packer/plugins \
-#             -w /workspace/${{ matrix.scenario }} \
+#             -w /workspace/scenario1 \
 #             -e AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} \
 #             -e AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} \
 #             packer-ansible-builder \
@@ -376,114 +158,214 @@ jobs:
 #           AMI_ID=$(grep 'artifact,0,id' packer-output.log | cut -d, -f6 | cut -d: -f2)
 #           echo "AMI_ID=$AMI_ID"
 #           echo "AMI_ID=$AMI_ID" >> $GITHUB_ENV
-      
-      # - name : Create New Launch Template 
-      #   env:
-      #     AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      #     AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      #     AWS_REGION: ap-northeast-2
-      #   run: |
-      #     LT_NAME="NoHands_final_tp"
 
-      #     echo "🔍 Checking if Launch Template $LT_NAME exists..."
-      #     LT_EXISTS=$(aws ec2 describe-launch-templates \
-      #       --launch-template-names "$LT_NAME" \
-      #       --region $AWS_REGION \
-      #       --query "LaunchTemplates[0].LaunchTemplateName" \
-      #       --output text || echo "NOT_FOUND")
+#       - name : Create New Launch Template 
+#         env:
+#           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+#           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#           AWS_REGION: ap-northeast-2
+#         run: |
+#           LT_NAME="NoHands_final_tp_scenario1"
 
-      #     if [ "$LT_EXISTS" = "$LT_NAME" ]; then
-      #       echo "✅ Launch Template exists. Creating new version..."
+#           echo "🔍 Checking if Launch Template $LT_NAME exists..."
+#           LT_EXISTS=$(aws ec2 describe-launch-templates \
+#             --launch-template-names "$LT_NAME" \
+#             --region $AWS_REGION \
+#             --query "LaunchTemplates[0].LaunchTemplateName" \
+#             --output text || echo "NOT_FOUND")
 
-      #       aws ec2 create-launch-template-version \
-      #         --launch-template-name "$LT_NAME" \
-      #         --source-version \$Latest \
-      #         --launch-template-data "{\"ImageId\":\"$AMI_ID\"}" \
-      #         --region $AWS_REGION
+#           if [ "$LT_EXISTS" = "$LT_NAME" ]; then
+#             echo "✅ Launch Template exists. Creating new version..."
 
-      #       aws ec2 modify-launch-template \
-      #         --launch-template-name "$LT_NAME" \
-      #         --default-version \$Latest \
-      #         --region $AWS_REGION
-      #     else
-      #       echo "🚀 Launch Template not found. Creating new one..."
+#             aws ec2 create-launch-template-version \
+#               --launch-template-name "$LT_NAME" \
+#               --source-version \$Latest \
+#               --launch-template-data "{\"ImageId\":\"$AMI_ID\"}" \
+#               --region $AWS_REGION
 
-      #       aws ec2 create-launch-template \
-      #         --launch-template-name "$LT_NAME" \
-      #         --version-description "Initial version" \
-      #         --launch-template-data "{\"ImageId\":\"$AMI_ID\", \"InstanceType\":\"t3.small\"}" \
-      #         --region $AWS_REGION
-      #     fi
+#             aws ec2 modify-launch-template \
+#               --launch-template-name "$LT_NAME" \
+#               --default-version \$Latest \
+#               --region $AWS_REGION
+#           else
+#             echo "🚀 Launch Template not found. Creating new one..."
 
-      # - name: Create ASG if not exists, otherwise update
-      #   env:
-      #     AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      #     AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      #     AWS_REGION: ap-northeast-2
-      #     VPC_ZONE_ID: ${{ secrets.SUBNET_ID }}
-          
-      #   run: |
-      #     ASG_NAME="NoHands_final_ASG"
-      #     LT_NAME="NoHands_final_tp"
+#             aws ec2 create-launch-template \
+#               --launch-template-name "$LT_NAME" \
+#               --version-description "Initial version" \
+#               --launch-template-data "{\"ImageId\":\"$AMI_ID\", \"InstanceType\":\"t3.small\"}" \
+#               --region $AWS_REGION
+#           fi
 
-      #     echo "🔍 Checking if ASG $ASG_NAME exists..."
+#       - name: Create ASG if not exists, otherwise update
+#         env:
+#           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+#           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#           AWS_REGION: ap-northeast-2
+#         run: |
+#           ASG_NAME="NoHands_final_ASG_scenario1"
+#           LT_NAME="NoHands_final_tp_scenario1"
 
-      #     ASG_EXISTS=$(aws autoscaling describe-auto-scaling-groups \
-      #       --auto-scaling-group-names "$ASG_NAME" \
-      #       --region $AWS_REGION \
-      #       --query "AutoScalingGroups[0].AutoScalingGroupName" \
-      #       --output text || echo "NOT_FOUND")
+#           echo "🔍 Checking if ASG $ASG_NAME exists..."
 
-      #     if [ "$ASG_EXISTS" = "NoHands_final_ASG" ]; then
-      #       echo "✅ ASG exists, skipping creation."
-      #     else
-      #       echo "🚀 ASG not found. Creating new one..."
+#           ASG_EXISTS=$(aws autoscaling describe-auto-scaling-groups \
+#             --auto-scaling-group-names "$ASG_NAME" \
+#             --region $AWS_REGION \
+#             --query "AutoScalingGroups[0].AutoScalingGroupName" \
+#             --output text || echo "NOT_FOUND")
 
-      #       aws autoscaling create-auto-scaling-group \
-      #         --auto-scaling-group-name "$ASG_NAME" \
-      #         --launch-template "LaunchTemplateName=$LT_NAME,Version=1" \
-      #         --min-size 1 \
-      #         --max-size 4 \
-      #         --desired-capacity 1 \
-      #         --vpc-zone-identifier "${{ secrets.SUBNET_ID }}" \
-      #         --health-check-type EC2 \
-      #         --health-check-grace-period 60 \
-      #         --region $AWS_REGION
-      #     fi
+#           if [ "$ASG_EXISTS" = "$ASG_NAME" ]; then
+#             echo "✅ ASG exists, skipping creation."
+#           else
+#             echo "🚀 ASG not found. Creating new one..."
 
+#             aws autoscaling create-auto-scaling-group \
+#               --auto-scaling-group-name "$ASG_NAME" \
+#               --launch-template "LaunchTemplateName=$LT_NAME" \
+#               --min-size 2 \
+#               --max-size 4 \
+#               --desired-capacity 1 \
+#               --vpc-zone-identifier "${{ secrets.SUBNET_ID }}" \
+#               --health-check-type EC2 \
+#               --health-check-grace-period 60 \
+#               --region $AWS_REGION
+#           fi
 
-      # - name: Update Launch Template with new AMI
-      #   env:
-      #     AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      #     AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      #   run: |
-      #     aws ec2 create-launch-template-version \
-      #       --launch-template-name "NoHands_final_tp" \
-      #       --source-version \$Latest \
-      #       --launch-template-data "{\"ImageId\":\"$AMI_ID\"}" \
-      #       --region ap-northeast-2
+#       - name: Trigger ASG Rolling Update
+#         env:
+#           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+#           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#         run: |
+#           aws autoscaling start-instance-refresh \
+#             --auto-scaling-group-name "NoHands_final_ASG_scenario1" \
+#             --strategy Rolling \
+#             --preferences '{"MinHealthyPercentage": 100, "InstanceWarmup": 60}' \
+#             --region ap-northeast-2
 
-      #     aws ec2 modify-launch-template \
-      #       --launch-template-name "NoHands_final_tp" \
-      #       --default-version \$Latest \
-      #       --region ap-northeast-2
+#   build-ami-scenario2:
+#     runs-on: ubuntu-latest
+#     name: Build AMI for scenario2
+#     needs: build-ami-scenario1
 
-      # - name: Trigger ASG Rolling Update
-      #   env:
-      #     AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      #     AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      #   run: |
-      #     aws autoscaling start-instance-refresh \
-      #       --auto-scaling-group-name "NoHands_final_ASG" \
-      #       --strategy Rolling \
-      #       --preferences '{"MinHealthyPercentage": 100, "InstanceWarmup": 60}' \
-      #       --region ap-northeast-2
+#     steps:
+#       - name: Checkout repository
+#         uses: actions/checkout@v3
 
-      # - name: Check ASG Rolling Update Status
-      #   env:
-      #     AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      #     AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      #   run: |
-      #     aws autoscaling describe-instance-refreshes \
-      #       --auto-scaling-group-name "NoHands_final_ASG" \
-      #       --region ap-northeast-2
+#       - name: Set up Docker
+#         uses: docker/setup-buildx-action@v3
+
+#       - name: Build Docker image for Packer + Ansible
+#         run: docker build -t packer-ansible-builder .
+
+#       - name: Set Packer Vars
+#         run: |
+#           echo 'PACKER_VARS=-var subnet_id=${{ secrets.SUBNET_ID }} -var vpc_id=${{ secrets.VPC_ID }} -var log_group_name=perf-tests-scenario2' >> $GITHUB_ENV
+
+#       - name: Initialize Packer Plugins
+#         run: |
+#           docker run --rm \
+#             -v ${{ github.workspace }}:/workspace \
+#             -v ${{ github.workspace }}/.packer-plugins:/root/.config/packer/plugins \
+#             -w /workspace/scenario2 \
+#             packer-ansible-builder \
+#             packer init .
+
+#       - name: Run Packer Build and capture AMI ID
+#         id: packer-build
+#         run: |
+#           docker run --rm \
+#             -v ${{ github.workspace }}:/workspace \
+#             -v ${{ github.workspace }}/.packer-plugins:/root/.config/packer/plugins \
+#             -w /workspace/scenario2 \
+#             -e AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} \
+#             -e AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} \
+#             packer-ansible-builder \
+#             packer build -machine-readable $PACKER_VARS aws-ubuntu.pkr.hcl \
+#             | tee packer-output.log
+
+#           AMI_ID=$(grep 'artifact,0,id' packer-output.log | cut -d, -f6 | cut -d: -f2)
+#           echo "AMI_ID=$AMI_ID"
+#           echo "AMI_ID=$AMI_ID" >> $GITHUB_ENV
+
+#       - name: Create New Launch Template
+#         env:
+#           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+#           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#           AWS_REGION: ap-northeast-2
+#         run: |
+#           LT_NAME="NoHands_final_tp_scenario2"
+
+#           echo "🔍 Checking if Launch Template $LT_NAME exists..."
+#           LT_EXISTS=$(aws ec2 describe-launch-templates \
+#             --launch-template-names "$LT_NAME" \
+#             --region $AWS_REGION \
+#             --query "LaunchTemplates[0].LaunchTemplateName" \
+#             --output text || echo "NOT_FOUND")
+
+#           if [ "$LT_EXISTS" = "$LT_NAME" ]; then
+#             echo "✅ Launch Template exists. Creating new version..."
+
+#             aws ec2 create-launch-template-version \
+#               --launch-template-name "$LT_NAME" \
+#               --source-version \$Latest \
+#               --launch-template-data "{\"ImageId\":\"$AMI_ID\"}" \
+#               --region $AWS_REGION
+
+#             aws ec2 modify-launch-template \
+#               --launch-template-name "$LT_NAME" \
+#               --default-version \$Latest \
+#               --region $AWS_REGION
+#           else
+#             echo "🚀 Launch Template not found. Creating new one..."
+
+#             aws ec2 create-launch-template \
+#               --launch-template-name "$LT_NAME" \
+#               --version-description "Initial version" \
+#               --launch-template-data "{\"ImageId\":\"$AMI_ID\", \"InstanceType\":\"t3.small\"}" \
+#               --region $AWS_REGION
+#           fi
+
+#       - name: Create ASG if not exists, otherwise update
+#         env:
+#           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+#           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#           AWS_REGION: ap-northeast-2
+#         run: |
+#           ASG_NAME="NoHands_final_ASG_scenario2"
+#           LT_NAME="NoHands_final_tp_scenario2"
+
+#           echo "🔍 Checking if ASG $ASG_NAME exists..."
+
+#           ASG_EXISTS=$(aws autoscaling describe-auto-scaling-groups \
+#             --auto-scaling-group-names "$ASG_NAME" \
+#             --region $AWS_REGION \
+#             --query "AutoScalingGroups[0].AutoScalingGroupName" \
+#             --output text || echo "NOT_FOUND")
+
+#           if [ "$ASG_EXISTS" = "$ASG_NAME" ]; then
+#             echo "✅ ASG exists, skipping creation."
+#           else
+#             echo "🚀 ASG not found. Creating new one..."
+
+#             aws autoscaling create-auto-scaling-group \
+#               --auto-scaling-group-name "$ASG_NAME" \
+#               --launch-template "LaunchTemplateName=$LT_NAME" \
+#               --min-size 1 \
+#               --max-size 4 \
+#               --desired-capacity 1 \
+#               --vpc-zone-identifier "${{ secrets.SUBNET_ID }}" \
+#               --health-check-type EC2 \
+#               --health-check-grace-period 60 \
+#               --region $AWS_REGION
+#           fi
+
+#       - name: Trigger ASG Rolling Update
+#         env:
+#           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+#           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#         run: |
+#           aws autoscaling start-instance-refresh \
+#             --auto-scaling-group-name "NoHands_final_ASG_scenario2" \
+#             --strategy Rolling \
+#             --preferences '{"MinHealthyPercentage": 100, "InstanceWarmup": 60}' \
+#             --region ap-northeast-2
