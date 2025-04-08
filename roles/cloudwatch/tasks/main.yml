@@ -26,7 +26,6 @@
     -s
   register: cloudwatch_agent_status
   changed_when: "'success' in cloudwatch_agent_status.stdout"
-  when: ansible_virtualization_type != "docker"
 
 - name: Show CloudWatch Agent status
   debug:
