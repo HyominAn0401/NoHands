@@ -48,7 +48,7 @@ build {
 
   provisioner "ansible" {
     playbook_file = "./playbook.yml"
-    extra_arguments  = ["--user=ubuntu", "--become", "--extra-vars", "log_group_name=${env.LOG_GROUP_NAME}"]
+    extra_arguments  = ["--user=ubuntu", "--become", "--extra-vars", "log_group_name={{user `log_group_name`}}"]
     ansible_env_vars = [
       "ANSIBLE_ROLES_PATH=../roles",
       "ANSIBLE_REMOTE_TEMP=/tmp/ansible-remote"
