@@ -50,8 +50,7 @@ build {
     playbook_file = "./playbook.yml"
     extra_arguments = [
       "--user=ubuntu",
-      "--become",
-      "--extra-vars", "log_group_name=${var.log_group_name}"
+      "--become"
     ]
     ansible_env_vars = [
       "ANSIBLE_ROLES_PATH=../roles",
