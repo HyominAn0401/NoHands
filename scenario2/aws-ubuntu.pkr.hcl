@@ -42,24 +42,23 @@ source "amazon-ebs" "ubuntu" {
   }
 }
 
-  build {
-    name    = "nohands-image2"
-    sources = ["source.amazon-ebs.ubuntu"]
-  
-    provisioner "shell" {
-      inline = [
-        "sudo apt-get update",
-        "sudo apt-get install -y ansible"
-      ]
-    }
-  
-    provisioner "ansible-local" {
-      playbook_file = "./playbook.yml"
-      extra_arguments = [
-        "--become",
-        "-e", "ANSIBLE_ROLES_PATH=../roles",
-        "-e", "ANSIBLE_REMOTE_TEMP=/tmp/ansible-remote"
-      ]
-    }
+build {
+  name    = "nohands-image2"
+  sources = ["source.amazon-ebs.ubuntu"]
+
+  provisioner "shell" {
+    inline = [
+      "sudo apt-get update",
+      "sudo apt-get install -y ansible"
+    ]
+  }
+
+  provisioner "ansible-local" {
+    playbook_file = "./playbook.yml"
+    extra_arguments = [
+      "--become",
+      "-e", "ANSIBLE_ROLES_PATH=../roles",
+      "-e", "ANSIBLE_REMOTE_TEMP=/tmp/ansible-remote"
+    ]
   }
 }
