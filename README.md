@@ -1,4 +1,4 @@
-# NoHands
+# NoHands 컨벤션
 
 ### 커밋컨벤션
 
